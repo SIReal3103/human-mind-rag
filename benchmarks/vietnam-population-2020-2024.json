@@ -1,0 +1,15 @@
+{
+  "source_url": "https://databank.worldbank.org/reports.aspx?country=VNM%2CNAC&series=SP.POP.TOTL&source=2",
+  "observed_on": "2026-10-06",
+  "method": "Values manually transcribed from the DataBank table returned by web search during this session. Same World Bank dataset; not independent corroboration of real-world population.",
+  "country_iso3": "VNM",
+  "indicator_id": "SP.POP.TOTL",
+  "source_id": "2",
+  "values": {
+    "2020": 98079191,
+    "2021": 98935098,
+    "2022": 99680655,
+    "2023": 100352192,
+    "2024": 100987686
+  }
+}

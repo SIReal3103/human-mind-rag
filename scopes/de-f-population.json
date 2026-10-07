@@ -1,0 +1,14 @@
+{
+  "scope_id": "de-f-vietnam-population",
+  "description": "Đề F thử nghiệm: hỏi đáp dân số Việt Nam 2020–2024",
+  "provider": "worldbank",
+  "source_id": "2",
+  "indicator_name": "Population, total",
+  "country": "VN",
+  "country_iso3": "VNM",
+  "start_year": 2020,
+  "end_year": 2024,
+  "value_kind": "nonnegative_integer",
+  "benchmark": "../benchmarks/vietnam-population-2020-2024.json",
+  "negative_control_country": "US"
+}

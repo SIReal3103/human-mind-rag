@@ -1,0 +1,3 @@
+The review UI, document lifecycle and model adapters in review_ui/ originate from Human Mind by SIReal3103: https://github.com/SIReal3103/human-mind-rag/tree/65c09690c21752f19476e60651cff5122afa9a7e . Integrated and adapted for the unified scope-data-bot application. Historical evaluation reports and runtime data are not included.
+
+The CLI, crawl, parsing and evidence engine originate from Qyroven/scope-data-bot: https://github.com/Qyroven/scope-data-bot/tree/ae8b28ca1e5ae107447475501f42af1845b9fb03 . This repository includes that unified codebase and subsequent search, parser, review, indexing and UI fixes validated on 2026-10-07. Existing source attribution is retained; this notice does not add a license.

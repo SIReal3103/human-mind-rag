@@ -1,0 +1,2 @@
+# Heavy local parser is isolated from the lightweight ingestion/retrieval runtime.
+docling[easyocr]==2.134.0

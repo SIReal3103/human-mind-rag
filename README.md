@@ -1,118 +1,111 @@
-# Human Mind — Duyệt tài liệu RAG
+# Human Mind RAG
 
-Giao diện local cho **scope → tự tìm nguồn → crawl/parse/check → duyệt → chunk/embedding/index → evidence**. Dùng [scope-data-bot](https://github.com/Qyroven/scope-data-bot) khóa tại `cb37446a00c6283cbb596df524885cfcb08a9fe7`. Không sửa source upstream.
+Bản hợp nhất engine và UI từ [scope-data-bot](https://github.com/Qyroven/scope-data-bot), kèm các bản sửa đã kiểm thử qua luồng crawl và duyệt nguồn Hà Nam. Repo này chứa đầy đủ mã để chạy, không cần clone engine phụ. Xem [nguồn gốc mã](NOTICE.md).
 
-Từ bản cấu hình API gốc, crawl/build/query gọi trực tiếp hàm upstream, không cài `StageRouter`, không chọn model từng bước, không sửa prompt/schema và không tự sửa assessment. UI chỉ hiển thị cấu hình API đang có. Human Mind vẫn quản lý HITL/tự duyệt, snapshot approved, key store riêng, trace và gate thu hồi.
+Bot CLI nhận **scope dữ liệu**, tự tìm nguồn → crawl → parse/check → save → chunk → embedding → index → gói evidence cho LLM. Ingestion không cần câu hỏi của user và không sinh câu trả lời.
 
-Xem [hướng dẫn agent](AGENT-GUIDE.md) để vận hành và phân biệt các phần bổ sung.
+Scope có thể là tài liệu khái niệm (định lý, giáo trình, nguyên lý vaccine) hoặc số liệu thống kê. Pipeline giữ raw source, metadata, locator và trace. Generic evidence luôn mang trạng thái review; việc index thành công không xác nhận số liệu đúng hoặc phạm vi đã đủ.
 
-## Cài và chạy
+Truy vấn tìm nguồn được tạo theo loại scope: scope có mốc năm/số liệu ưu tiên nguồn thống kê, scope khái niệm ưu tiên giải thích/giáo trình. Nếu search bị CAPTCHA hoặc không thể trả kết quả, lượt chạy báo `incomplete` và ghi nguyên nhân trong `discovery.json`; không tự coi 0 nguồn là kết quả hợp lệ. Muốn crawl tự động cần search provider hoạt động và cấu hình model/key hợp lệ.
 
-Cần Python 3.12, Git, SQLite FTS5; mạng để cài dependencies/tokenizer lần đầu.
+## Một repo, giao diện Human in the Loop
+
+```bash
+./run-ui.sh
+# Mở http://127.0.0.1:8765
+```
+
+Launcher cài runtime UI đã khóa một lần; không clone repo khác. Cấu hình key trong Settings → tạo phiên và nhập scope → crawl/parse/check → đối chiếu bản gốc và duyệt → tạo index → lấy evidence cho chatbot. Tự duyệt mặc định tắt. Ưu tiên Docling nếu đã cài local; chạy `./setup-parser.sh` để cài OCR/layout, hoặc `DOCUMENT_PARSER=native ./run-ui.sh` để dùng parser nhẹ. CLI bên dưới vẫn dùng được riêng và không có bước duyệt UI.
+
+Tài liệu đầy đủ: [UI và API](review_ui/README.md). Bản duyệt giữ bảng/provenance; sửa text bỏ tọa độ cũ. Bản trích xuất thiếu có thể thay bằng text đầy đủ đã đối chiếu toàn bộ nguồn; cần người duyệt xác nhận cảnh báo, bản gốc và lịch sử parser vẫn được giữ. UI chỉ báo index sẵn sàng khi có `ready_partial` và ít nhất một chunk; build rỗng/`no_evidence` báo lỗi. Cache embedding dùng chung trong kho UI. Thu hồi/hết hiệu lực chặn index cũ; sang ngày mới không bắt rebuild nếu tập phiên bản còn hiệu lực không đổi. UI phát triển từ [Human Mind](https://github.com/SIReal3103/human-mind-rag); xem [nguồn gốc](NOTICE.md).
+
+## Chạy
+
+Python 3.12 hoặc 3.14. SQLite phải có FTS5.
 
 ```bash
 git clone https://github.com/SIReal3103/human-mind-rag.git
 cd human-mind-rag
-bash setup.sh
-# Tạo cấu hình upstream nếu chưa có; không ghi đè cấu hình đã có:
-test -f .runtime/scope-data-bot/.env.local || cp .runtime/scope-data-bot/.env.example .runtime/scope-data-bot/.env.local
-# Sửa .runtime/scope-data-bot/.env.local trên máy: profile/model/key theo upstream.
-bash run.sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.lock.txt
+cp .env.example .env.local
+# Điền key trong .env.local; không commit file này.
+./setup-parser.sh  # Cần uv; tải model Docling/OCR local một lần, runtime Python 3.12 riêng.
+./run-data.sh --scope 'Thu thập tài liệu về định lý Pythagoras, điều kiện áp dụng và ví dụ'
 ```
 
-Mở `http://127.0.0.1:8765/`. `setup.sh` clone riêng đúng commit, không chép source upstream vào repo này. Upstream chưa khai báo license; không tự thêm license cho source đó.
+Các lựa chọn input: `--scope`, `--brief-file <file.txt>` hoặc `--from-run bot-runs/<id>` để tiếp tục một lượt crawl đã có. Không tự crawl lại khi dùng from-run.
 
-Có thể dùng `SCOPE_BOT_PATH`, `RAG_REVIEW_PYTHON`, `RAG_REVIEW_VENV`, `RAG_REVIEW_PORT`, `RAG_REVIEW_DATA`. Nếu đặt `SCOPE_BOT_PATH`, sửa `.env.local` trong chính checkout đó. Khởi động lại server khi thay environment; `.env.local` được đọc lại khi kiểm cấu hình/bắt đầu bước.
+`--parser docling --ocr auto` dùng Docling, giữ text PDF có sẵn và OCR vùng ảnh. `--ocr full` OCR toàn trang; `--ocr off` tắt OCR. `--document-max-pages 40` giới hạn số trang đầu, luôn báo partial nếu tài liệu dài hơn. Các flag parse chỉ áp dụng cho lượt scope mới; `--from-run` không parse lại bản gốc.
 
-## API: đúng cấu hình scope-data-bot
+`setup-parser.sh` cài dependency đã pin trong `.venv-docling`, tải layout/table/EasyOCR tiếng Việt/Anh. Không cần key AI cho parse, tài liệu được xử lý local. Máy khác cần chạy setup một lần; có thể dùng lại cùng model embedding nếu provider hỗ trợ. Model parse không phụ thuộc gateway BTC/OpenAI.
 
-`gateway.setting()` gốc quyết định theo **environment → scope-data-bot/.env.local → mặc định**. UI không tự chọn hoặc ghi đè các giá trị này.
+Giới hạn mặc định: 5 nguồn, 12 URL, depth 1, 400 chunks. Thay bằng `--max-sources`, `--max-pages`, `--max-depth`, `--max-chunks`. Chạy nhỏ trước; search/model/embedding dùng API trả phí. Mỗi request có timeout và giới hạn response, nhưng chưa có giới hạn tổng chi phí bằng tiền hoặc cancel service.
 
-| Cấu hình | OpenAI | BTC |
-|---|---|---|
-| `AI_PROVIDER` | `openai` (mặc định upstream) | `btc` |
-| Key | `OPENAI_API_KEY`, sau đó alias legacy `THUCCHIEN_API_KEY` | `BTC_API_KEY` |
-| Model text/search mặc định | `OPENAI_SEARCH_MODEL=gpt-4.1-mini` | `BTC_TEXT_MODEL=gpt-6-luna` |
-| Embedding mặc định | `OPENAI_EMBEDDING_MODEL=text-embedding-3-small` | `BTC_EMBEDDING_MODEL=text-multilingual-embedding-002` |
-| Chiều mặc định nếu không đặt | 1536 | 768 |
-| Text/search endpoint | `https://api.openai.com/v1/responses` | `https://api.thucchien.ai/responses` |
-| Embedding endpoint | `https://api.openai.com/v1/embeddings` | `https://api.thucchien.ai/embeddings` |
+## Provider
 
-Planner/check/query gate/rerank dùng cùng text model. Search dùng tool `web_search` và payload gốc; embedding dùng implementation/payload/validation/batch của upstream. `EMBEDDING_DIMENSIONS` nếu đặt sẽ ưu tiên hơn chiều mặc định theo provider: đổi provider phải kiểm cả biến này.
+`AI_PROVIDER=openai`: key OpenAI riêng, gpt-4.1-mini cho planner/search/check/rerank, text-embedding-3-small 1536 chiều mặc định. Đây là profile đã dùng để test live. Biến môi trường ưu tiên hơn .env.local.
 
-BTC vẫn kiểm `BTC_STRUCTURED_VERIFIED`, `BTC_SEARCH_VERIFIED`, `BTC_EMBEDDING_VERIFIED`, `BTC_EMBEDDING_BATCH_VERIFIED`. Chỉ bật sau khi thực sự kiểm đúng model/endpoint/protocol. UI hiển thị cờ được cấu hình, không coi cờ là bằng chứng đã smoke-test. Không tự fallback sang provider khác.
+`AI_PROVIDER=btc`: BTC_API_KEY, gpt-6-luna, text-multilingual-embedding-002 và EMBEDDING_DIMENSIONS=768. Request chỉ tới api.thucchien.ai, không tự fallback sang OpenAI. Phải smoke-test đúng model/endpoint/protocol rồi mới bật từng BTC_*_VERIFIED; bản hiện tại chưa chạy bằng key BTC và để các gate đóng. Đổi provider/model/dim cần xây index phù hợp; không so vector khác profile. Gemini-embedding-2 luôn một input/request.
 
-**Chú ý alias:** `THUCCHIEN_API_KEY` được upstream coi là alias OpenAI legacy, không tự biến thành profile BTC. Nếu thiếu `OPENAI_API_KEY` nhưng environment có alias này, UI sẽ ghi rõ đang dùng nó. `configured=true` chỉ nghĩa có giá trị, không chứng minh key hợp lệ. Không in key ra terminal/log/chat.
+Các endpoint/model BTC được đối chiếu với [Embedding BTC](https://docs.thucchien.ai/docs/round-2/user-guide/embeddings) và [Web search BTC](https://docs.thucchien.ai/docs/round-2/user-guide/google-search-grounding). Payload structured output qua BTC cần kiểm riêng; tên SDK/model không chứng minh gateway hỗ trợ toàn bộ protocol.
 
-**Kho key trong Cấu hình API key của Human Mind là kho riêng, không được dùng cho pipeline gốc.** Lưu/thay/reset tại UI không sửa environment hoặc `.env.local` upstream. Chỉ giữ chức năng này cho người dùng đã lưu key và các tích hợp khác; UI có thông báo phân biệt. Không tự chuyển key giữa hai kho. Key app lưu plaintext với quyền file 0600/thư mục 0700, chưa có Keychain; reset không thu hồi key ở provider.
+## Output
 
-## Thao tác UI
+Mỗi lượt nằm ở `bot-runs/<id>/`:
 
-1. Mở **Crawl & RAG pipeline** → **Tạo phiên mới**. Nhập scope và collection; dùng collection mới khi cần tách corpus cũ.
-2. Đọc khối **API đang dùng · cấu hình scope-data-bot gốc**: provider, text model, embedding/chiều, endpoints, tên biến và nguồn key. Bấm **Đọc lại cấu hình upstream** sau khi sửa file. Không có dropdown API/model.
-3. Chọn giới hạn crawl. Mặc định 12 trang/sâu 1/5 nguồn. Sâu 0 lấy URL đầu, 1 theo thêm một lớp link, 2 thêm hai lớp. Số trang không phải số API calls hay hạn mức tiền.
-4. Có thể bật **Tự động duyệt tài liệu đủ điều kiện**. Bấm **Bắt đầu crawl**, theo dõi trace. Không cần nhập URL; upstream tự tìm.
-5. Mở hàng chờ đúng phiên; đối chiếu bản gốc, trích xuất, cảnh báo, sửa bản pending, ghi người duyệt rồi approve/reject. Có thể áp chính sách tự duyệt cho phiên đã hoàn tất.
-6. **Tạo index từ bản đã duyệt**: snapshot lấy tất cả approved còn hiệu lực trong collection, không chỉ một phiên crawl. Pending không vào embedding/index.
-7. Khi ready, nhập câu hỏi → **Lấy evidence** → đọc nguồn → **Tải evidence JSON cho agent**. Query dùng API gốc; không có model riêng cho lần tra.
+| File/thư mục | Nội dung |
+| --- | --- |
+| scope.json, report.json, report.html | Scope, nguồn tìm được, lỗi và phần thiếu |
+| raw/, parsed/ | Snapshot nguồn, parser output và bảng có vị trí ô |
+| parsed/* với parser Docling | Native Docling JSON, trang/bbox, grid ô gộp, config/version, cảnh báo OCR/bảng và cờ partial |
+| lineage.json, feedback.json | Truy ngược, lỗi phát hiện và đề xuất xử lý |
+| data/chunks.json | Text, source ID/version, URL, locator, token count, quality, trace ID |
+| data/index.sqlite | Vector + FTS5/BM25, model và dimensions |
+| data/embedding-receipts.json | Response hash, usage và cache hits |
+| data/manifest.json | Trạng thái index và thiếu định nghĩa/phạm vi |
+| data/llm-input.json | Gói evidence theo scope trong 6000 tokens, báo đoạn bị bỏ vì budget |
+| data/artifacts/ | Bản bất biến để rebuild không phá trace cũ |
 
-Index lưu cấu hình API tại lúc build. Nếu provider/model/chiều/endpoints/capability config đã đổi, khôi phục cấu hình hoặc build lại; không trộn vector khác profile. Index adapter cũ chỉ xem/tải evidence đã lưu nếu approval gate còn hợp lệ; muốn tra mới phải build lại theo API gốc.
+`ready_partial` = có index dùng được, chưa chứng minh đầy đủ/chính xác. `no_evidence` = không có đoạn đủ điều kiện. `failed` = không được phục vụ index. Exit 0 khi có evidence; 2 khi thiếu evidence/lỗi. Documents out-of-scope/unassessed bị loại, review giữ cờ review. Cache theo provider/scope/text hash/model/dim/chunker.
 
-Tạo phiên mới giữ lịch sử, tài liệu và key. Không có job resume tự động/vô hạn. Job có owner PID đã chết được đánh dấu interrupted; job còn chủ sống hoặc legacy thiếu PID không bị suy diễn là đã dừng. Phiên UI cũ chỉ refresh CSRF một lần khi server trả đúng lỗi phiên nội bộ, không dùng để retry lỗi provider.
+## Phía LLM gọi khi user hỏi
 
-## HITL, tự duyệt và nhập tay
+```python
+from data_pipeline import retrieve
 
-Thêm PDF/TXT/MD/HTML, dán text hoặc URL công khai tại **Thêm tài liệu**; đây là luồng nhập riêng, không thay seed của pipeline. Giới hạn 10 MB/600.000 ký tự. Parser/chunker local; text UTF-8; bản gốc bất biến. Native PDF giữ trang thật, scan/partial cần OCR hoặc nội dung đã đối chiếu. Docling/OCR của ứng dụng chưa nghiệm thu; xem setup parser ở upstream.
+context = retrieve("bot-runs/<id>", user_question, budget=6000, top_k=6)
+# Chatbot truyền context vào LLM và yêu cầu trích evidence ID/source.
+```
 
-Điểm chất lượng trích xuất là quy tắc 0–100, không phải xác suất đúng. Có findings về parse rỗng/partial, ký tự lỗi, nội dung ngắn, trùng nguồn, thiếu hiệu lực, dấu hiệu secret/prompt injection. Không bảo đảm phát hiện mọi sai sót. `factual_confidence=unverified`.
+Luồng query: kiểm phạm vi câu hỏi → query embedding → cosine + BM25 → RRF → LLM relevance scoring → thêm đoạn liền kề → context có nguồn và cờ chất lượng. Đây chưa phải dedicated cross-encoder reranker. `rerank=False` bỏ gate/rerank; chế độ này không bảo đảm abstention, chỉ là truy hồi candidates.
 
-Tự duyệt `auto-review-v1` mặc định tắt. Cần đồng thời: pending revision 1 chưa sửa; có chunks; score >=90; không warning/error; nguồn web có URL; assessment status review, subject_match=true, geography_match=true nếu có country gate; có evidence quotes với verification `model_assessed_quotes_checked_not_fact_verified`; không partial/truncated. Bản không đạt giữ pending và lý do. Audit phân biệt automatic/manual, không coi tự duyệt là người đã xác minh sự thật.
+Không nhét toàn bộ corpus vào prompt. Context bị giới hạn, metadata và đoạn omitted được báo rõ. Mỗi context lưu riêng `data/context-*.json` với trace ID. Scope chỉ là phạm vi corpus; câu hỏi do chatbot nhận sau ingestion.
 
-Approve có revision/hash/audit và kiểm cảnh báo trong transaction. Reject cần lý do, có thể reopen. Approved bất biến; thay nội dung bằng phiên bản mới. Thu hồi nguồn và thay tập approved làm index cũ bị chặn. Tên reviewer chỉ là nhãn local, chưa có đăng nhập xác thực danh tính. Hiệu lực lấy từ metadata đã kiểm, không dùng ngày upload làm ngày có hiệu lực.
+Embedding cache dùng lại vector khi provider/model/số chiều và văn bản đầu vào giống nhau, kể cả giữa các scope; mỗi run vẫn giữ assessment và nguồn riêng. Các chunk trùng đầu vào trong một run chỉ gửi embedding một lần. `embedding-receipts.json` ghi `cache_hits` và `deduplicated_chunks`. Cache cũ theo scope được chuyển sang khóa mới khi đọc, không cần gọi API lại.
 
-## Lỗi và tiếp tục
-
-- **401:** key của provider upstream bị từ chối. Đọc tên biến/nguồn key trên UI; thay đúng environment/.env.local rồi chạy lượt mới. Key UI riêng không sửa lỗi này.
-- **403 provider / 402 / 429:** kiểm quyền model, billing/quota/rate limit. Không tự đổi provider.
-- **CAPABILITY_UNVERIFIED:** BTC gate gốc chưa mở; không tự bật để vượt lỗi.
-- **invalid output / planner năm sai:** lỗi đầu ra model/hợp đồng, không phải kết luận key hỏng; đọc trace và scope. Giữ prompt/validator gốc, không có lượt sửa assessment riêng của Human Mind.
-- **HTTP/TLS/robots/trang chặn:** lỗi nguồn; crawler gốc tiếp tục nguồn khác trong budget. Không tắt TLS/vượt chặn.
-- **0 tài liệu:** chưa thu thập được dữ liệu để duyệt; hoàn tất job không phải ingestion thành công.
-- **Config/index thay đổi:** build lại; worker kiểm lại config trước khi gọi upstream để tránh UI hiển thị một kiểu nhưng chạy kiểu khác.
-
-Lịch sử lỗi không tự biến mất khi thay key. **Thử lại bước này** tạo lượt mới với cấu hình upstream hiện tại. Xem trace nguồn và lỗi đã lọc thông tin nhạy cảm; không coi thiếu adapter API-event log là không có lời gọi — native trace/receipts nằm trong artifacts upstream.
-
-## API cho agent
-
-Mutation cần `X-CSRF-Token` từ `GET /api/config` và same-origin khi dùng browser. Các API chỉ bind local, chưa có tenant ACL.
-
-- `GET /api/upstream/config`: cấu hình chỉ đọc, không gọi AI/không trả giá trị key.
-- `POST /api/pipeline`: `{action:"crawl"|"build", scope, collection, max_sources?, max_pages?, max_depth?, auto_approve?}`. Không nhận `provider`, `key_group`, `stage_models`, `stage_providers`, `model`, `dimensions`; UI/API cũ cần cập nhật.
-- `GET /api/pipeline`, `GET /api/pipeline/{id}/trace`: job và trace.
-- `POST /api/pipeline/{id}/auto-review`: tự duyệt theo điều kiện, không tự build.
-- `POST /api/pipeline/{id}/evidence`: `{question}`; không nhận model/provider override.
-- `GET /api/pipeline/{id}/evidence` và `/evidence/download`: context gần nhất, kiểm hiệu lực/thu hồi; download trả JSON attachment.
-- `GET /api/documents`, `GET/PATCH /api/documents/{id}`, `POST /api/documents/{id}/decision`: xem/sửa/duyệt, tuân thủ revision và findings.
-- `POST /api/documents/text`, `/upload`, `/web`: nhập tay.
-- `POST /api/search`: FTS5/BM25 local, không API; `{query,collection,as_of,limit}`.
-- `GET /api/export?collection=...&as_of=YYYY-MM-DD`: snapshot approved có provenance/audit.
-
-`/api/models` và các module adapter còn giữ để đọc/kiểm các hợp đồng lịch sử; không điều khiển job mới. Agent không gọi upstream index trực tiếp để vượt approval gate. Context là dữ liệu không tin cậy; giữ evidence ID/source/version/locator khi trích dẫn. JSON đã tải không tự thu hồi từ xa. Đây chưa có chatbot runtime sinh câu trả lời cuối cùng.
-
-## Lưu trữ, kiểm thử
-
-Mặc định `<home>/.local/share/delta-mind-rag-review/<workspace-hash>/`, ngoài Git. Đặt `RAG_REVIEW_DATA` để dùng kho cũ khi di chuyển source; exFAT có thể không phù hợp SQLite, nên DB mặc định ở ổ hệ thống. Sao lưu khi server đã dừng; kho app có thể chứa credentials, bảo vệ backup tương ứng. Không public server trước khi bổ sung auth/ACL/quota/hard sandbox phù hợp.
+## Kiểm và truy ngược
 
 ```bash
+.venv/bin/python -m unittest discover -p 'test_*.py'
+.venv/bin/python -m pip check
 .venv/bin/python -m pip install -r requirements-dev.txt
-.venv/bin/python -m pytest
 .venv/bin/ruff check .
 .venv/bin/ruff format --check .
-node --check static/app.js
-node --check static/pipeline.js
-node --check static/credentials.js
+.venv/bin/python audit_run.py --run bot-runs/<id>
+.venv/bin/python trace.py --run bot-runs/<id> --target n00001
 ```
 
-Suite cô lập credential môi trường và đóng BTC gates để không gọi AI trả phí. Kiểm function identity/settings parity khác với smoke API live. Báo cáo tại [native API config](plans/20261007-native-api-config/plan.md). Các báo cáo adapter/UI trước đó là lịch sử, không chứng minh luồng native đã chạy end-to-end với key hiện tại.
+`audit_run.py` đối chiếu text spans, vị trí hàng/ô, chunks/index, dimensions, token count và hash trên trace. Nó không xác nhận sự thật trong tài liệu hoặc độ trung thực với PDF/HTML đã render. Nơi phát hiện lỗi không tự chứng minh nguyên nhân gốc; feedback chưa tự sửa sự thật.
 
-Mỗi worker chụp cấu hình API hiệu lực bằng các hàm gateway gốc rồi giữ các giá trị đó trong environment riêng của lượt chạy (key chỉ ở bộ nhớ). Sửa `.env.local` giữa lượt không đổi provider/model/key của lượt đang chạy; lượt mới đọc cấu hình mới. Không thay hàm upstream hay ghi key vào job/artifact.
+## Giới hạn hiện tại
+
+Parser nhẹ cho HTML/CSV/JSON; Docling local cho PDF, PNG/JPEG/TIFF/WebP một frame và DOCX/PPTX/XLSX. HTML giữ article lead có thể bị readability bỏ sót và chuyển MathML thông dụng thành text tìm kiếm; `html_leads`/`html_math` giữ XPath cùng MathML gốc để đối chiếu. Khi trích xuất precision bỏ sót phần lớn nội dung, parser thử khôi phục đoạn văn từ vùng article/body có đánh dấu, loại các khối điều hướng, footer và nội dung liên quan; HTML gốc vẫn được giữ để đối chiếu. OCR EasyOCR vi/en, bảng TableFormer, CPU mặc định 2 threads. Docling mặc định xử lý 40 trang đầu, timeout cứng 180 giây, tối đa input 10 MB/500 trang PDF, output 600k ký tự/20 MB JSON; file Office có giới hạn giải nén, ảnh tối đa 20 MP. Timeout kết thúc cả nhóm tiến trình. Chưa có hard memory sandbox; không dùng trực tiếp cho upload không tin cậy từ nhiều tenant.
+
+`.env.example` yêu cầu Docling. `DOCUMENT_PARSER=auto` dùng Docling khi runtime đã cài; nếu chưa có thì PDF dùng pypdf và ghi hạn chế rõ, ảnh/Office báo cần setup. `--parser native` chọn pypdf. Native long PDF vẫn giữ tối đa 24 trang theo scope (scan tối đa 500 trang/45 giây). Cache parse local theo raw/config/worker/dependency-lock, không cache assessment; không bị lẫn scope. Cache không phải kho bằng chứng: từng run vẫn giữ raw/parsed và trace riêng.
+
+OCR có thể mất chữ hoặc đọc sai ô bảng; cần kiểm lại nguồn trước khi dùng số liệu. Cờ chất lượng và giá trị null không bảo đảm đã phát hiện mọi lỗi. Formula enrichment ngoài MathML, mô tả ảnh/biểu đồ và chữ viết tay chưa được kiểm chứng; chưa bật các model enrichment nặng. Không có cam kết đọc đúng mọi công thức/bảng, hay mọi ngôn ngữ. Nguồn chặn/JavaScript/định dạng không hỗ trợ giữ lỗi. Tham khảo API sử dụng tại [Docling OCR](https://docling-project.github.io/docling/_generated/examples/full_page_ocr/) và [offline/local models](https://docling-project.github.io/docling/usage/advanced_options/).
+
+Một writer cho mỗi run; operation đồng thời báo RUN_BUSY. Crash có thể để .data-lock, cần kiểm run trước khi xóa lock cũ. Exact vector search phù hợp corpus nhỏ. UI hiện phục vụ một nhóm nhỏ tại local; chưa có tenant ACL hoặc egress sandbox cho dịch vụ crawl công khai. Chỉ nhận nguồn công khai; không đưa tài liệu cá nhân vào repo.
+
+Repo không chứa key, raw pages, vectors, private guide hay thư mục các lượt chạy. Public giữ code, hướng dẫn sử dụng, test hồi quy và CI. Báo cáo thử nghiệm, review và script chạy benchmark live giữ local trong `local-evidence/` (không được Git theo dõi). `benchmarks/vietnam-population-2020-2024.json` là dữ liệu đối chiếu mà connector World Bank sử dụng khi chạy; cần giữ cùng code. GitHub CI kiểm offline trên Python 3.12/3.14, không gọi inference bằng key thật.
