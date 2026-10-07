@@ -1,0 +1,16 @@
+.data/
+.runtime/
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+._*
+*.pyc
+test-results/
+credentials/
+
+.env
+.env.*
+*.sqlite
+*.sqlite-*
+.DS_Store

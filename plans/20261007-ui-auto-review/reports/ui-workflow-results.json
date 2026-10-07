@@ -1,0 +1,169 @@
+{
+  "run": {
+    "id": "20261007-ui-auto-review",
+    "product_name": "Human Mind · Kiểm chứng luồng UI",
+    "mode": "UI-LIVE · kiểm quy trình, không chấm chất lượng LLM",
+    "started_at": "2026-10-07T17:10:19+07:00",
+    "dataset_label": "Nguồn công khai Cúc Phương, tối đa 4 trang, độ sâu 0"
+  },
+  "cases": [
+    {
+      "id": "new-session",
+      "category": "agent",
+      "status": "pass",
+      "question": "Tạo phiên mới giữ bộ key và model ngoài đã chọn.",
+      "expected_answer": "Tạo phiên mới giữ bộ key và model ngoài đã chọn.",
+      "answer": "Tạo phiên mới giữ bộ key và model ngoài đã chọn.",
+      "source_mode": "UI",
+      "checks": [
+        {
+          "name": "workflow_contract",
+          "status": "pass",
+          "reason": "Tạo phiên mới giữ bộ key và model ngoài đã chọn."
+        }
+      ]
+    },
+    {
+      "id": "missing-key",
+      "category": "agent",
+      "status": "pass",
+      "question": "Thiếu BTC được báo trước khi tạo job và gọi AI.",
+      "expected_answer": "Thiếu BTC được báo trước khi tạo job và gọi AI.",
+      "answer": "Thiếu BTC được báo trước khi tạo job và gọi AI.",
+      "source_mode": "UI",
+      "checks": [
+        {
+          "name": "workflow_contract",
+          "status": "pass",
+          "reason": "Thiếu BTC được báo trước khi tạo job và gọi AI."
+        }
+      ]
+    },
+    {
+      "id": "csrf",
+      "category": "agent",
+      "status": "pass",
+      "question": "UI cũ sau restart lấy lại CSRF và tạo đúng một phiên index.",
+      "expected_answer": "UI cũ sau restart lấy lại CSRF và tạo đúng một phiên index.",
+      "answer": "UI cũ sau restart lấy lại CSRF và tạo đúng một phiên index.",
+      "source_mode": "UI",
+      "checks": [
+        {
+          "name": "workflow_contract",
+          "status": "pass",
+          "reason": "UI cũ sau restart lấy lại CSRF và tạo đúng một phiên index."
+        }
+      ]
+    },
+    {
+      "id": "auto-review",
+      "category": "agent",
+      "status": "pass",
+      "question": "Crawl Cúc Phương: 3 tài liệu được tự duyệt, audit ghi automatic.",
+      "expected_answer": "Crawl Cúc Phương: 3 tài liệu được tự duyệt, audit ghi automatic.",
+      "answer": "Crawl Cúc Phương: 3 tài liệu được tự duyệt, audit ghi automatic.",
+      "source_mode": "UI + audit",
+      "checks": [
+        {
+          "name": "workflow_contract",
+          "status": "pass",
+          "reason": "Crawl Cúc Phương: 3 tài liệu được tự duyệt, audit ghi automatic."
+        }
+      ]
+    },
+    {
+      "id": "index",
+      "category": "agent",
+      "status": "pass",
+      "question": "Tạo index thành công: 10 chunks; snapshot có 3 automatic, 0 human.",
+      "expected_answer": "Tạo index thành công: 10 chunks; snapshot có 3 automatic, 0 human.",
+      "answer": "Tạo index thành công: 10 chunks; snapshot có 3 automatic, 0 human.",
+      "source_mode": "UI + snapshot",
+      "checks": [
+        {
+          "name": "workflow_contract",
+          "status": "pass",
+          "reason": "Tạo index thành công: 10 chunks; snapshot có 3 automatic, 0 human."
+        }
+      ]
+    },
+    {
+      "id": "retrieve",
+      "category": "agent",
+      "status": "pass",
+      "question": "Câu hỏi về Cúc Phương trả 4 evidence.",
+      "expected_answer": "Câu hỏi về Cúc Phương trả 4 evidence.",
+      "answer": "Câu hỏi về Cúc Phương trả 4 evidence.",
+      "source_mode": "UI",
+      "checks": [
+        {
+          "name": "workflow_contract",
+          "status": "pass",
+          "reason": "Câu hỏi về Cúc Phương trả 4 evidence."
+        }
+      ]
+    },
+    {
+      "id": "download",
+      "category": "agent",
+      "status": "pass",
+      "question": "Nút tải tạo human-mind-evidence.json thật, JSON hợp lệ, 4 evidence và automatic provenance.",
+      "expected_answer": "Nút tải tạo human-mind-evidence.json thật, JSON hợp lệ, 4 evidence và automatic provenance.",
+      "answer": "Nút tải tạo human-mind-evidence.json thật, JSON hợp lệ, 4 evidence và automatic provenance.",
+      "source_mode": "UI + file",
+      "checks": [
+        {
+          "name": "workflow_contract",
+          "status": "pass",
+          "reason": "Nút tải tạo human-mind-evidence.json thật, JSON hợp lệ, 4 evidence và automatic provenance."
+        }
+      ]
+    },
+    {
+      "id": "contracts",
+      "category": "agent",
+      "status": "pass",
+      "question": "103 tests và 30 subtests đạt; sau sửa download, 12 pipeline tests đạt. Reviewer không còn blocker.",
+      "expected_answer": "103 tests và 30 subtests đạt; sau sửa download, 12 pipeline tests đạt. Reviewer không còn blocker.",
+      "answer": "103 tests và 30 subtests đạt; sau sửa download, 12 pipeline tests đạt. Reviewer không còn blocker.",
+      "source_mode": "Tests + review",
+      "checks": [
+        {
+          "name": "workflow_contract",
+          "status": "pass",
+          "reason": "103 tests và 30 subtests đạt; sau sửa download, 12 pipeline tests đạt. Reviewer không còn blocker."
+        }
+      ]
+    },
+    {
+      "id": "btc-live",
+      "category": "rag",
+      "status": "not_run",
+      "question": "Chưa thử BTC trực tiếp vì chưa có key BTC.",
+      "answer": "Chưa thử BTC trực tiếp vì chưa có key BTC.",
+      "checks": []
+    },
+    {
+      "id": "factual-quality",
+      "category": "rag",
+      "status": "not_run",
+      "question": "Chưa chấm độ đúng dữ kiện hoặc faithfulness bằng bộ chuẩn/LLM judge; tự duyệt không xác minh sự thật.",
+      "answer": "Chưa chấm độ đúng dữ kiện hoặc faithfulness bằng bộ chuẩn/LLM judge; tự duyệt không xác minh sự thật.",
+      "checks": []
+    }
+  ],
+  "provenance": {
+    "crawl_job": "94253105a42042cf9a0c7065856f9ef9",
+    "index_job": "f527a2a64ab44668adc7a45590a18742",
+    "upstream_commit": "cb37446a00c6283cbb596df524885cfcb08a9fe7",
+    "qa_kit_commit": "bf0640b2c73ec7abdb3a9aec0754c4fcbdf5bb8e",
+    "renderer": "chatbot-eval-kit/report.py; qa-report absent in kit",
+    "live_mutations": "CUA UI only",
+    "models": {
+      "planner_check": "gpt-6-luna",
+      "search_evidence": "gemini-3.1-flash-lite",
+      "embedding": "gemini-embedding-2"
+    },
+    "limits": "Một lượt nhỏ; không bảo đảm mọi nguồn hay API luôn thành công. Có nguồn crawl không nhận được; không sửa upstream."
+  }
+}

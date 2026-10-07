@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Báo cáo eval · Human Mind · Kiểm chứng luồng UI</title>
+  <!-- Editable offline template. Placeholders are filled by report.py; never put invented scores here. -->
+  <style>
+    :root { --ink:#17243c; --muted:#617087; --line:#dce2e9; --paper:#fff; --blue:#1f4872; --teal:#1c7967; --red:#bd433d; --amber:#bd741e; }
+    * { box-sizing:border-box; }
+    body { margin:0; color:var(--ink); background:#edf1f5; font:15px/1.58 Arial, Helvetica, sans-serif; }
+    main { max-width:1210px; margin:30px auto; padding:48px 55px; background:var(--paper); box-shadow:0 6px 32px #20314a12; }
+    h1,h2,h3,p { margin:0; }
+    h1 { max-width:850px; margin:14px 0 12px; font-size:36px; line-height:1.2; letter-spacing:-1.1px; }
+    h2 { font-size:24px; line-height:1.3; letter-spacing:-.4px; }
+    h3 { margin-bottom:8px; font-size:17px; }
+    p + p { margin-top:10px; }
+    .eyebrow { display:block; color:var(--blue); font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; }
+    .hero { border-top:6px solid var(--ink); padding-top:22px; }
+    .hero-top { display:flex; justify-content:space-between; align-items:baseline; gap:15px; }
+    .mode { display:inline-block; padding:5px 10px; border:1px solid #c8d7e5; border-radius:3px; background:#f3f7fb; color:var(--blue); font-size:10px; font-weight:700; letter-spacing:.5px; }
+    .metadata { font-size:12px; color:var(--muted); overflow-wrap:anywhere; }
+    .subtitle { margin-bottom:14px; font-size:18px; }
+    .scope-note { margin-top:21px; padding:15px 18px; background:#edf4fa; border-left:3px solid var(--blue); font-size:13px; }
+    .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:25px 0 11px; }
+    .metric { min-width:0; padding:15px; border:1px solid var(--line); border-radius:4px; }
+    .metric > span { display:block; font-size:12px; font-weight:700; }
+    .metric strong { display:block; margin:5px 0; font-size:32px; line-height:1.2; font-weight:700; }
+    .metric small { display:block; color:var(--muted); font-size:11px; }
+    .metric.pass strong { color:var(--teal); } .metric.fail strong { color:var(--red); }
+    .rate-note { color:var(--muted); font-size:12px; }
+    .integrity-note { margin-top:12px; color:#8b4e11; font-size:12px; }
+    section { margin-top:34px; }
+    .section-heading { margin-bottom:18px; }
+    .section-heading .eyebrow { margin-bottom:6px; }
+    .section-heading > p { margin-top:7px; color:var(--muted); font-size:12px; }
+    .legend { display:flex; flex-wrap:wrap; gap:19px; margin:15px 0 20px; font-size:11px; }
+    .legend span { display:flex; align-items:center; gap:6px; }
+    .legend i { width:9px; height:9px; border-radius:2px; }
+    .chart-row { margin-bottom:12px; break-inside:avoid; }
+    .chart-label { display:flex; justify-content:space-between; font-size:12px; font-weight:700; }
+    .chart-label span { color:var(--muted); font-weight:400; }
+    .chart svg { display:block; width:100%; height:24px; margin:2px 0; }
+    .chart-counts { color:var(--muted); font-size:10px; }
+    .findings { margin-top:23px; padding-top:18px; border-top:1px solid var(--line); }
+    .priority-list { margin:0; padding-left:19px; font-size:12px; }
+    .priority-list li { margin:5px 0; }
+    .finding-note, .muted { color:var(--muted); font-size:12px; }
+    .judge { margin-top:24px; padding:18px; border:1px solid #c9d8d2; border-radius:4px; background:#f5faf8; }
+    .judge.pending { border-color:#e8d8b7; background:#fffaf0; }
+    .judge .eyebrow { color:#886022; font-size:10px; margin-bottom:8px; }
+    .judge p { font-size:12px; }
+    .reading-note { margin:17px 0; color:var(--muted); font-size:12px; }
+    table { width:100%; border-collapse:collapse; }
+    th { text-align:left; font-weight:700; }
+    td,th { vertical-align:top; overflow-wrap:anywhere; }
+    .cases-table { table-layout:fixed; font-size:12px; }
+    .cases-table .col-id { width:10%; } .cases-table .col-question { width:23%; }
+    .cases-table .col-expected { width:25%; } .cases-table .col-answer { width:29%; } .cases-table .col-verdict { width:13%; }
+    .cases-table thead { display:table-header-group; }
+    .cases-table th { padding:10px 9px; color:#fff; background:var(--ink); line-height:1.4; font-size:11px; }
+    .case-primary td { padding:12px 9px 8px; border-top:1px solid #c7d0dc; white-space:pre-wrap; }
+    .case-id { color:var(--blue); }
+    .case-id small { display:block; margin-top:6px; color:var(--muted); font-size:9px; }
+    .case-verdict { white-space:normal !important; }
+    .badge { display:inline-block; padding:3px 6px; border-radius:3px; font-size:10px; font-weight:700; line-height:1.4; white-space:normal; }
+    .badge.pass { color:#176350; background:#e1f1e9; }
+    .badge.fail { color:#9c332e; background:#fae6e4; }
+    .badge.error { color:#905511; background:#fff0d7; }
+    .badge.not_run { color:#596374; background:#eceef2; }
+    .case-reasons td { padding:7px 10px 12px; background:#f6f8fb; border-bottom:1px solid var(--line); }
+    .reason-title { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.6px; }
+    .checks { display:grid; grid-template-columns:1fr 1fr; gap:7px 20px; margin:6px 0 0; padding:0; list-style:none; font-size:10.5px; }
+    .checks b, .checks span { display:block; }
+    .checks span { margin-top:1px; white-space:pre-wrap; }
+    .check-pass { color:#276a5a; } .check-fail { color:var(--red); } .check-error { color:var(--amber); } .check-not_run { color:var(--muted); }
+    .case-reasons p { margin-top:5px; font-size:11px; }
+    .compact-table { margin-top:12px; font-size:12px; }
+    .compact-table th,.compact-table td { border-bottom:1px solid var(--line); padding:9px 10px; }
+    .compact-table thead th { background:#edf1f6; font-size:11px; }
+    .compact-table small { display:block; color:var(--muted); font-size:10px; }
+    .framework-block { margin-top:21px; }
+    .framework-block h3 { margin-bottom:3px; }
+    .diagnostics { color:var(--muted); font-size:10px; }
+    .control-samples-title { margin-top:24px; }
+    .control-sample { margin-top:19px; padding-top:16px; border-top:1px solid var(--line); }
+    .control-sample .compact-table th { width:20%; }
+    .coverage-table td:nth-child(1) { width:25%; } .coverage-table td:nth-child(2) { width:20%; }
+    .footer { margin-top:36px; padding-top:17px; border-top:2px solid var(--ink); color:var(--muted); font-size:11px; }
+    .footer strong { color:var(--ink); }
+    @media screen and (max-width:800px) {
+      main { padding:24px 18px; margin:0; }
+      h1 { font-size:28px; } .hero-top { display:block; } .mode { margin-top:10px; }
+      .metrics { grid-template-columns:1fr 1fr; } .checks { grid-template-columns:1fr; }
+      .cases-table { font-size:10px; } .cases-table th { font-size:9px; }
+      .case-primary td { padding:8px 4px; } .badge { font-size:9px; }
+    }
+    @page { size:A4 portrait; margin:14mm 12mm 15mm; }
+    @media print {
+      * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      body { background:#fff; font-size:10pt; }
+      main { max-width:none; margin:0; padding:0; box-shadow:none; }
+      h1 { font-size:25pt; } h2 { font-size:18pt; } h3 { font-size:12pt; }
+      .hero { padding-top:5mm; border-top-width:1.5mm; }
+      .hero-top .eyebrow { font-size:8pt; } .mode { font-size:7pt; }
+      .metadata,.rate-note,.reading-note,.scope-note,.finding-note,.muted { font-size:8pt; }
+      .subtitle { font-size:13pt; } .scope-note { padding:3mm 4mm; margin-top:4mm; }
+      .metrics { gap:2mm; margin-top:5mm; } .metric { padding:3mm; }
+      .metric strong { font-size:23pt; } .metric > span { font-size:8pt; } .metric small { font-size:7pt; }
+      section { margin-top:7mm; } .section-heading { margin-bottom:4mm; break-after:avoid; }
+      .section-heading > p { font-size:8pt; }
+      .category-section { break-before:auto; }
+      .category-section:first-of-type { break-before:page; }
+      .method-section { break-before:auto; }
+      .case-block { break-inside:avoid; }
+      .cases-table { font-size:8pt; line-height:1.45; }
+      .cases-table th { padding:2.5mm 2mm; font-size:7.4pt; }
+      .case-primary td { padding:2mm 2mm 1.5mm; }
+      .case-id small { font-size:6.5pt; }
+      .badge { padding:1mm 1.5mm; font-size:7pt; }
+      .case-reasons td { padding:1mm 2.5mm 1.5mm; }
+      .case-reasons p { margin:0; }
+      .reason-title { font-size:7pt; }
+      .checks { gap:2mm 4mm; font-size:7.4pt; }
+      .legend { margin:3mm 0 4mm; font-size:7.5pt; }
+      .chart-row { margin-bottom:3mm; } .chart-label { font-size:8pt; }
+      .chart-counts { font-size:7pt; } .chart svg { height:5mm; }
+      .judge,.framework-block,.compact-table tr,.findings { break-inside:avoid; }
+      .control-sample { break-inside:avoid; }
+      .judge { padding:2mm 3mm; margin-top:3mm; } .judge h3 { display:none; } .judge p { font-size:8pt; margin:0; }
+      .judge .eyebrow { margin-bottom:1mm; font-size:7pt; }
+      .control-sample { margin-top:3mm; }
+      .compact-table { font-size:8pt; } .compact-table th,.compact-table td { padding:1.8mm; }
+      .compact-table thead th { font-size:7.5pt; }
+      .priority-list { font-size:8pt; }
+      .footer { font-size:7.5pt; margin-top:7mm; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div class="hero-top"><span class="eyebrow">Chatbot · Agent · Guardrail</span><span class="mode">CHƯA XÁC ĐỊNH CHẾ ĐỘ</span></div>
+    <h1>Báo cáo đánh giá hành vi AI</h1>
+    <p class="subtitle">Human Mind · Kiểm chứng luồng UI</p>
+    <p class="metadata">Lượt 20261007-ui-auto-review · 07/10/2026 · 17:10 (giờ Việt Nam)<br>Bộ ca: Nguồn công khai Cúc Phương, tối đa 4 trang, độ sâu 0</p>
+    <div class="scope-note">Chưa ghi chế độ chạy. Không thể xác định đây là kết quả demo, replay hay sản phẩm.</div>
+  </header>
+  <div class="metrics"><div class="metric total"><span>Tổng ca</span><strong>10</strong><small>Không gồm đối chứng âm</small></div><div class="metric pass"><span>Đạt</span><strong>8</strong><small>Theo kiểm tra đã chạy</small></div><div class="metric fail"><span>Không đạt</span><strong>0</strong><small>Cần xem nguyên nhân</small></div><div class="metric not_run"><span>Lỗi / chưa chạy</span><strong>0 / 2</strong><small>Không tính thành đạt</small></div></div>
+  <p class="rate-note">100,0% đạt trên 8 ca có kết luận đạt/không đạt; 0 ca lỗi và 2 ca chưa chạy được báo riêng. Đây là tỷ lệ ca đạt theo bộ kiểm tra, không phải điểm chất lượng ngữ nghĩa tổng hợp.</p>
+
+  <section class="overview">
+    <div class="section-heading"><span class="eyebrow">01 · Kết quả có bằng chứng</span><h2>Phân bố theo nhóm kiểm thử</h2><p>Chiều dài mỗi đoạn biểu thị số ca thực tế. Các nhóm dùng cùng thang số lượng.</p></div>
+    <div class="legend"><span><i style="background:#1c7967"></i>Đạt</span><span><i style="background:#bd433d"></i>Không đạt</span><span><i style="background:#bd741e"></i>Lỗi chạy</span><span><i style="background:#b1b7c1"></i>Chưa chạy</span></div><div class="chart"><div class="chart-row"><div class="chart-label">Agent · Công cụ và quy trình <span>8 ca</span></div><svg viewBox="0 0 680 24" role="img" aria-label="Agent · Công cụ và quy trình: Đạt: 8, Không đạt: 0, Lỗi chạy: 0, Chưa chạy: 0"><title>Đạt: 8, Không đạt: 0, Lỗi chạy: 0, Chưa chạy: 0</title><rect width="680" height="18" y="3" fill="#eef0f4"/><rect x="0.00" y="3" width="680.00" height="18" fill="#1c7967"/></svg><div class="chart-counts">Đạt: 8, Không đạt: 0, Lỗi chạy: 0, Chưa chạy: 0</div></div><div class="chart-row"><div class="chart-label">RAG · Truy hồi và dẫn nguồn <span>2 ca</span></div><svg viewBox="0 0 680 24" role="img" aria-label="RAG · Truy hồi và dẫn nguồn: Đạt: 0, Không đạt: 0, Lỗi chạy: 0, Chưa chạy: 2"><title>Đạt: 0, Không đạt: 0, Lỗi chạy: 0, Chưa chạy: 2</title><rect width="680" height="18" y="3" fill="#eef0f4"/><rect x="0.00" y="3" width="170.00" height="18" fill="#b1b7c1"/></svg><div class="chart-counts">Đạt: 0, Không đạt: 0, Lỗi chạy: 0, Chưa chạy: 2</div></div></div>
+    <div class="findings"><p class="finding-note">Không ghi nhận ca không đạt hoặc lỗi trong các kiểm tra đã chạy. Điều này không chứng minh các khả năng chưa được đo hoặc chất lượng ngoài tập ca.</p></div>
+    <div class="judge pending"><span class="eyebrow">LLM-as-a-judge · Chưa có kết quả hợp lệ</span><h3>Đánh giá ngữ nghĩa còn chờ chạy</h3><p>Chưa thể kết luận độ đúng, đầy đủ hoặc bám nguồn bằng LLM judge từ lượt này. Cần cấu hình judge, rubric và tập tham chiếu phù hợp rồi chạy riêng.</p></div>
+  </section>
+  <section class="category-section"><div class="section-heading"><span class="eyebrow">Nhóm 01</span><h2>Agent · Công cụ và quy trình</h2><p>8 ca · 8 đạt · 0 không đạt · 0 lỗi · 0 chưa chạy</p></div><table class="cases-table"><colgroup><col class="col-id"><col class="col-question"><col class="col-expected"><col class="col-answer"><col class="col-verdict"></colgroup><thead><tr><th>Ca</th><th>Câu hỏi / yêu cầu</th><th>Đáp án / hành vi mong đợi</th><th>Câu trả lời thực tế</th><th>Kết luận</th></tr></thead><tbody class="case-block"><tr class="case-primary"><td class="case-id"><strong>new-session</strong><small>Không ghi độ trễ</small></td><td class="question">Tạo phiên mới giữ bộ key và model ngoài đã chọn.</td><td>Tạo phiên mới giữ bộ key và model ngoài đã chọn.</td><td>Tạo phiên mới giữ bộ key và model ngoài đã chọn.</td><td class="case-verdict"><span class="badge pass">Đạt</span></td></tr><tr class="case-reasons"><td colspan="5"><b class="reason-title">Căn cứ kết luận</b><p class="diagnostics">Đạt 1 điều kiện: —.</p></td></tr></tbody><tbody class="case-block"><tr class="case-primary"><td class="case-id"><strong>missing-key</strong><small>Không ghi độ trễ</small></td><td class="question">Thiếu BTC được báo trước khi tạo job và gọi AI.</td><td>Thiếu BTC được báo trước khi tạo job và gọi AI.</td><td>Thiếu BTC được báo trước khi tạo job và gọi AI.</td><td class="case-verdict"><span class="badge pass">Đạt</span></td></tr><tr class="case-reasons"><td colspan="5"><b class="reason-title">Căn cứ kết luận</b><p class="diagnostics">Đạt 1 điều kiện: —.</p></td></tr></tbody><tbody class="case-block"><tr class="case-primary"><td class="case-id"><strong>csrf</strong><small>Không ghi độ trễ</small></td><td class="question">UI cũ sau restart lấy lại CSRF và tạo đúng một phiên index.</td><td>UI cũ sau restart lấy lại CSRF và tạo đúng một phiên index.</td><td>UI cũ sau restart lấy lại CSRF và tạo đúng một phiên index.</td><td class="case-verdict"><span class="badge pass">Đạt</span></td></tr><tr class="case-reasons"><td colspan="5"><b class="reason-title">Căn cứ kết luận</b><p class="diagnostics">Đạt 1 điều kiện: —.</p></td></tr></tbody><tbody class="case-block"><tr class="case-primary"><td class="case-id"><strong>auto-review</strong><small>Không ghi độ trễ</small></td><td class="question">Crawl Cúc Phương: 3 tài liệu được tự duyệt, audit ghi automatic.</td><td>Crawl Cúc Phương: 3 tài liệu được tự duyệt, audit ghi automatic.</td><td>Crawl Cúc Phương: 3 tài liệu được tự duyệt, audit ghi automatic.</td><td class="case-verdict"><span class="badge pass">Đạt</span></td></tr><tr class="case-reasons"><td colspan="5"><b class="reason-title">Căn cứ kết luận</b><p class="diagnostics">Đạt 1 điều kiện: —.</p></td></tr></tbody><tbody class="case-block"><tr class="case-primary"><td class="case-id"><strong>index</strong><small>Không ghi độ trễ</small></td><td class="question">Tạo index thành công: 10 chunks; snapshot có 3 automatic, 0 human.</td><td>Tạo index thành công: 10 chunks; snapshot có 3 automatic, 0 human.</td><td>Tạo index thành công: 10 chunks; snapshot có 3 automatic, 0 human.</td><td class="case-verdict"><span class="badge pass">Đạt</span></td></tr><tr class="case-reasons"><td colspan="5"><b class="reason-title">Căn cứ kết luận</b><p class="diagnostics">Đạt 1 điều kiện: —.</p></td></tr></tbody><tbody class="case-block"><tr class="case-primary"><td class="case-id"><strong>retrieve</strong><small>Không ghi độ trễ</small></td><td class="question">Câu hỏi về Cúc Phương trả 4 evidence.</td><td>Câu hỏi về Cúc Phương trả 4 evidence.</td><td>Câu hỏi về Cúc Phương trả 4 evidence.</td><td class="case-verdict"><span class="badge pass">Đạt</span></td></tr><tr class="case-reasons"><td colspan="5"><b class="reason-title">Căn cứ kết luận</b><p class="diagnostics">Đạt 1 điều kiện: —.</p></td></tr></tbody><tbody class="case-block"><tr class="case-primary"><td class="case-id"><strong>download</strong><small>Không ghi độ trễ</small></td><td class="question">Nút tải tạo human-mind-evidence.json thật, JSON hợp lệ, 4 evidence và automatic provenance.</td><td>Nút tải tạo human-mind-evidence.json thật, JSON hợp lệ, 4 evidence và automatic provenance.</td><td>Nút tải tạo human-mind-evidence.json thật, JSON hợp lệ, 4 evidence và automatic provenance.</td><td class="case-verdict"><span class="badge pass">Đạt</span></td></tr><tr class="case-reasons"><td colspan="5"><b class="reason-title">Căn cứ kết luận</b><p class="diagnostics">Đạt 1 điều kiện: —.</p></td></tr></tbody><tbody class="case-block"><tr class="case-primary"><td class="case-id"><strong>contracts</strong><small>Không ghi độ trễ</small></td><td class="question">103 tests và 30 subtests đạt; sau sửa download, 12 pipeline tests đạt. Reviewer không còn blocker.</td><td>103 tests và 30 subtests đạt; sau sửa download, 12 pipeline tests đạt. Reviewer không còn blocker.</td><td>103 tests và 30 subtests đạt; sau sửa download, 12 pipeline tests đạt. Reviewer không còn blocker.</td><td class="case-verdict"><span class="badge pass">Đạt</span></td></tr><tr class="case-reasons"><td colspan="5"><b class="reason-title">Căn cứ kết luận</b><p class="diagnostics">Đạt 1 điều kiện: —.</p></td></tr></tbody></table></section><section class="category-section"><div class="section-heading"><span class="eyebrow">Nhóm 02</span><h2>RAG · Truy hồi và dẫn nguồn</h2><p>2 ca · 0 đạt · 0 không đạt · 0 lỗi · 2 chưa chạy</p></div><table class="cases-table"><colgroup><col class="col-id"><col class="col-question"><col class="col-expected"><col class="col-answer"><col class="col-verdict"></colgroup><thead><tr><th>Ca</th><th>Câu hỏi / yêu cầu</th><th>Đáp án / hành vi mong đợi</th><th>Câu trả lời thực tế</th><th>Kết luận</th></tr></thead><tbody class="case-block"><tr class="case-primary"><td class="case-id"><strong>btc-live</strong><small>Không ghi độ trễ</small></td><td class="question">Chưa thử BTC trực tiếp vì chưa có key BTC.</td><td>Không ghi đáp án tham chiếu.</td><td>Chưa thử BTC trực tiếp vì chưa có key BTC.</td><td class="case-verdict"><span class="badge not_run">Chưa chạy</span></td></tr><tr class="case-reasons"><td colspan="5"><b class="reason-title">Căn cứ kết luận</b><p>Không có lý do chi tiết được ghi trong kết quả.</p></td></tr></tbody><tbody class="case-block"><tr class="case-primary"><td class="case-id"><strong>factual-quality</strong><small>Không ghi độ trễ</small></td><td class="question">Chưa chấm độ đúng dữ kiện hoặc faithfulness bằng bộ chuẩn/LLM judge; tự duyệt không xác minh sự thật.</td><td>Không ghi đáp án tham chiếu.</td><td>Chưa chấm độ đúng dữ kiện hoặc faithfulness bằng bộ chuẩn/LLM judge; tự duyệt không xác minh sự thật.</td><td class="case-verdict"><span class="badge not_run">Chưa chạy</span></td></tr><tr class="case-reasons"><td colspan="5"><b class="reason-title">Căn cứ kết luận</b><p>Không có lý do chi tiết được ghi trong kết quả.</p></td></tr></tbody></table></section>
+  <section class="method-section">
+    <div class="section-heading"><span class="eyebrow">02 · Diễn giải phép đo</span><h2>Framework và giới hạn kết luận</h2></div>
+    <p class="reading-note">Kiểm tra xác định đối chiếu các điều kiện đã khai báo: định dạng, dữ kiện, nguồn, hành động hoặc hành vi an toàn. Smoke test xác nhận một công cụ hoặc metric chạy được. Cả hai không tự chứng minh độ đúng ngữ nghĩa trên các câu hỏi mới. “Đã đo” nghĩa là có điểm, chưa áp dụng ngưỡng nghiệm thu sản phẩm. Điểm trung bình tính riêng từng metric từ kết quả hợp lệ; không cộng các framework thành một điểm chất lượng chung.</p>
+    <p>Không có kết quả framework bổ sung trong lượt chạy này.</p>
+  </section>
+  <section class="controls-section">
+    <div class="section-heading"><span class="eyebrow">03 · Kiểm tra bộ chấm</span><h2>Đối chứng âm</h2><p>Câu trả lời hoặc hành vi sai có chủ đích để kiểm tra khả năng phát hiện lỗi. Các đối chứng không được cộng vào tỷ lệ đạt của chatbot.</p></div>
+    <p>Không có đối chứng âm trong kết quả. Chưa có bằng chứng ở lượt này rằng bộ chấm nhận ra câu trả lời hoặc hành vi sai có chủ đích.</p>
+  </section>
+  <section class="coverage-section">
+    <div class="section-heading"><span class="eyebrow">04 · Phạm vi và bước tiếp theo</span><h2>Những gì đã và chưa được đo</h2><p>Đây là phạm vi thực dụng của tập ca hiện tại, không phải cam kết phủ mọi chatbot, agent hoặc tình huống tấn công.</p></div>
+    <p>Chưa khai báo bản đồ phạm vi. Chỉ các ca và kiểm tra được liệt kê trong báo cáo là có bằng chứng; không suy ra đã phủ toàn bộ khả năng của sản phẩm.</p>
+  </section>
+  <footer class="footer"><strong>Cách đọc:</strong> Đạt = thỏa các kiểm tra đã chạy của ca. Không đạt = có kiểm tra thất bại. Lỗi chạy = chưa đo được hành vi do lỗi thực thi. Chưa chạy = chưa có phép đo. Khi có kiểm tra con chưa chạy, kết luận đạt chỉ áp dụng cho phần đã chạy; xem “Căn cứ kết luận” từng ca.</footer>
+</main>
+</body>
+</html>
