@@ -19,6 +19,7 @@ from credentials import CredentialStore
 from store import Conflict, Store
 from pipeline import Pipeline
 from model_catalog import catalog
+from upstream_config import read_config
 from pipeline_trace import trace_view
 
 ROOT = Path(__file__).resolve().parent
@@ -120,6 +121,10 @@ def create_app(data_dir=None):
     @app.get("/api/credentials")
     def credential_summary():
         return credentials.summary()
+
+    @app.get("/api/upstream/config")
+    def upstream_api_config():
+        return read_config()
 
     @app.get("/api/models")
     def model_catalog():

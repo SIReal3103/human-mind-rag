@@ -1,23 +1,21 @@
 """Isolated upstream execution. Credentials arrive through stdin, never artifacts."""
 
-from contextlib import nullcontext
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ingestion import _require_upstream
-from api_routing import StageRouter, read_events
-from model_catalog import configuration
+from upstream_config import freeze_config
 from auto_review import approval_mode
 
 
 def safe_error(error):
     message = str(error)
     known = {
+        "UPSTREAM_CONFIG_CHANGED": "Cấu hình API upstream đã đổi sau khi bắt đầu. Tạo phiên mới hoặc tạo lại index bằng cấu hình hiện tại.",
         "Planner tự thay đổi năm đã trích từ input": "Lập kế hoạch: model trả năm khác phạm vi đã yêu cầu. Đây là lỗi kiểm tra kế hoạch, không phải lỗi key. Chạy lại với khoảng năm cụ thể.",
         "Planner tự chọn mẫu số không có trong input": "Lập kế hoạch: model tự chọn mẫu số không có trong yêu cầu. Làm rõ mẫu số rồi thử lại; không phải lỗi key.",
         "Model output không đúng schema": "Model trả cấu trúc dữ liệu không hợp lệ; nội dung chưa được chấp nhận. Thử lại hoặc đổi model.",
@@ -29,7 +27,7 @@ def safe_error(error):
     if http:
         code = http[1]
         hint = {
-            "401": "Key không được chấp nhận. Kiểm tra key của provider đã chọn trong Cấu hình API key.",
+            "401": "Key không được chấp nhận. Kiểm tra key của provider đã chọn trong environment hoặc scope-data-bot/.env.local.",
             "403": "Provider từ chối quyền truy cập. Kiểm tra quyền tài khoản và model.",
             "429": "Provider giới hạn lượt gọi hoặc hạn mức thanh toán. Kiểm tra quota/billing trước khi thử lại.",
         }.get(code, "Kiểm tra trạng thái dịch vụ và quyền sử dụng model trước khi thử lại.")
@@ -43,7 +41,7 @@ def safe_error(error):
     if capability:
         return f"CAPABILITY_UNVERIFIED: {capability[1]}. Repo gốc yêu cầu kiểm thử khả năng BTC trước khi bật cờ này; pipeline không tự bỏ qua kiểm tra."
     if message in ("Chưa có key cho AI_PROVIDER=btc", "Chưa có key cho AI_PROVIDER=openai"):
-        return message + ". Mở Cấu hình API key và lưu key của provider đã chọn."
+        return message + ". Kiểm tra environment hoặc scope-data-bot/.env.local."
     if message == "Embedding model/index contract mismatch":
         return "Phản hồi embedding không khớp model hoặc số lượng yêu cầu. Index chưa được tạo."
     return f"Pipeline không hoàn tất ({type(error).__name__}). Kiểm tra trace, nguồn và cấu hình phiên."
@@ -125,35 +123,11 @@ def prepare_snapshot(folder, scope):
 
 def execute(request):
     sys.path.insert(0, _require_upstream()["path"])
-    provider = request.get("provider", "btc")
-    os.environ["AI_PROVIDER"] = provider
-    os.environ["BTC_API_KEY" if provider == "btc" else "OPENAI_API_KEY"] = request.pop("key", "")
-    folder = Path(request["folder"])
-    credentials = request.pop("credentials", {})
-    config = (
-        configuration(request["key_group"], request["stage_models"])
-        if request.get("key_group")
-        else None
-    )
-    router = (
-        StageRouter(
-            request["stage_providers"],
-            credentials,
-            folder,
-            request["api_attempt"],
-            config,
-            request.get("effective_scope", request.get("scope", "")),
-        )
-        if request.get("stage_providers")
-        else None
-    )
-    stage = "planner" if request["action"] == "crawl" else "embedding"
-    with router if router else nullcontext():
-        with router.profile(stage) if router else nullcontext():
-            return execute_upstream(request, folder, router)
+    freeze_config(request.get("api_config"))
+    return execute_upstream(request, Path(request["folder"]))
 
 
-def execute_upstream(request, folder, router):
+def execute_upstream(request, folder):
     if request["action"] == "crawl":
         from bot import run_bot
 
@@ -182,12 +156,10 @@ def execute_upstream(request, folder, router):
             request["model"],
             request["dimensions"],
             request["max_chunks"],
-            **({"request_fn": router.embedding_request} if router else {}),
         )
     return retrieve(
         folder / "published",
         request["question"],
-        **({"request_fn": router.embedding_request} if router else {}),
     )
 
 
@@ -202,7 +174,4 @@ if __name__ == "__main__":
             "ok": False,
             "error": safe_error(error),
         }
-    result["api_events"] = [
-        e for e in read_events(request["folder"]) if e.get("attempt") == request.get("api_attempt")
-    ]
     output.write_text(json.dumps(result, ensure_ascii=False))

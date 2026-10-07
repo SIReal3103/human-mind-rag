@@ -234,7 +234,8 @@ def test_api_requires_session_and_approved_sources(tmp_path):
         assert client.get("/api/pipeline").json() == {"jobs": []}
 
 
-def test_scope_only_crawl_requires_selected_key_without_provider_fallback(tmp_path):
+def test_scope_only_crawl_requires_upstream_key_without_ui_fallback(tmp_path, monkeypatch):
+    monkeypatch.setenv("BTC_API_KEY", "")
     pipeline = Pipeline(Store(tmp_path), CredentialStore(tmp_path))
     pipeline.credentials.put("openai", "test-only-other-provider")
     payload = {
@@ -242,12 +243,12 @@ def test_scope_only_crawl_requires_selected_key_without_provider_fallback(tmp_pa
         "scope": "Kinh tế Hà Nam giai đoạn 2020–2024",
         "collection": "ha-nam",
     }
-    with pytest.raises(ValueError, match="Chưa lưu key cho btc"):
+    with pytest.raises(ValueError, match="BTC_API_KEY: chưa có key"):
         pipeline.start(payload)
     assert pipeline.list() == []
     with pytest.raises(ValueError, match="không nhận seed_urls"):
         pipeline.start({**payload, "seed_urls": ["https://example.com/article"]})
-    with pytest.raises(ValueError, match="Chọn BTC hoặc OpenAI"):
+    with pytest.raises(ValueError, match="không nhận chọn provider/model"):
         pipeline.start({**payload, "provider": "google"})
 
 

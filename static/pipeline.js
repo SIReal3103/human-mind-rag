@@ -30,72 +30,33 @@ export async function renderPipeline(container, api, openQueue, options = {}) {
   const pages = field('max_pages', 'Tối đa trang mỗi phiên (1–30)', '12', 'number'); pages.min = 1; pages.max = 30;
   const depth = field('max_depth', 'Độ sâu liên kết (0–2)', '1', 'number'); depth.min = 0; depth.max = 2;
   form.append(el('p', 'Mặc định repo: 12 trang, độ sâu 1, tối đa 5 nguồn đầu. Độ sâu 0 chỉ lấy trang tìm được; 1 theo thêm một lớp liên kết; 2 theo thêm hai lớp.', 'field-hint'));
-  const stages = [['planner','Lập kế hoạch'], ['search','Tự tìm nguồn / web search'], ['check','Kiểm nội dung / xếp nguồn'], ['embedding','Embedding tài liệu và câu hỏi'], ['evidence','Kiểm phạm vi / rerank evidence']];
-  const catalog = await api('/api/models');
-  const groupLabel = el('label', 'Bộ key dùng cho toàn bộ phiên'), keyGroup = el('select');
-  keyGroup.id = 'pipeline-key-group'; groupLabel.htmlFor = keyGroup.id;
-  for (const [value,text] of [['btc','BTC · key Ban tổ chức'],['external','Ngoài · key riêng OpenAI / Google / DeepSeek']]) { const option = el('option',text); option.value = value; keyGroup.append(option); }
-  form.append(groupLabel,keyGroup);
-  const selectors = {}, keyHints = {};
-  let credentialData;
-  const apiChoices = el('section', '', 'pipeline-api-choices'); apiChoices.append(el('h3', 'Chọn model cho từng bước'));
-  for (const [stage, title] of stages) {
-    const row = el('div', '', 'pipeline-api-row'), label = el('label', title), select = el('select');
-    select.id = `pipeline-model-${stage}`; label.htmlFor = select.id;
-    const hint = el('p', 'Đang đọc trạng thái key…', 'field-hint'); hint.setAttribute('aria-live','polite');
-    selectors[stage] = select; keyHints[stage] = hint; row.append(label, select, hint); apiChoices.append(row);
-  }
-  form.append(apiChoices);
-  const sourceLink = el('a', 'Danh sách model và bảng giá BTC ↗', 'text-link'); sourceLink.href = catalog.source; sourceLink.target = '_blank'; sourceLink.rel = 'noopener noreferrer'; form.append(sourceLink);
-  const provider = selectors.embedding;
-  const populateModels = (selected = {}) => {
-    for (const [stage] of stages) {
-      const select = selectors[stage]; select.replaceChildren();
-      for (const model of catalog.models.filter(m => m.groups.includes(keyGroup.value) && m.stages.includes(stage))) {
-        const option = el('option', model.id); option.value = model.id; select.append(option);
-      }
-      const wanted = selected[stage] || catalog.defaults[keyGroup.value][stage];
-      select.value = Array.from(select.options).some(o => o.value === wanted) ? wanted : catalog.defaults[keyGroup.value][stage];
+  const apiConfigPanel = el('section', '', 'pipeline-api-choices');
+  apiConfigPanel.setAttribute('aria-label', 'Cấu hình API gốc chỉ đọc');
+  form.append(apiConfigPanel);
+  let nativeConfig;
+  const showConfig = config => {
+    apiConfigPanel.replaceChildren(el('h3', 'API đang dùng · cấu hình scope-data-bot gốc'));
+    apiConfigPanel.append(el('p', `Provider: ${config.provider}`, 'notice'));
+    for (const [label, value] of [
+      ['Lập kế hoạch / tìm nguồn / kiểm nội dung / rerank', config.text_model],
+      ['Embedding tài liệu và câu hỏi', `${config.embedding_model} · ${config.dimensions} chiều`],
+      ['Endpoint text và web search', config.endpoints.text_search],
+      ['Endpoint embedding', config.endpoints.embedding],
+      ['Nguồn cấu hình', config.precedence],
+      ['Key', `${config.key.name} · ${config.key.configured ? 'Đã cấu hình (chưa xác nhận API gọi thành công)' : 'Chưa cấu hình'} · ${config.key.source}`],
+    ]) apiConfigPanel.append(el('p', `${label}: ${value}`, 'field-hint'));
+    if (config.provider === 'btc') {
+      for (const [name, enabled] of Object.entries(config.capabilities)) apiConfigPanel.append(el('p', `${name}: ${enabled ? '1 · được cấu hình bật' : '0 · chưa bật; upstream sẽ kiểm gate'}`, enabled ? 'field-hint' : 'notice'));
     }
+    apiConfigPanel.append(el('p', 'Chỉ hiển thị. Thay cấu hình bằng environment hoặc .env.local của checkout scope-data-bot rồi cập nhật trang. Key đã lưu trong mục Cấu hình API key của Human Mind không được dùng cho pipeline gốc. Không có adapter đổi model, prompt hoặc tự sửa assessment.', 'field-hint'));
   };
-  const selectedModels = () => Object.fromEntries(stages.map(([stage]) => [stage, selectors[stage].value]));
-  const selectedProfiles = () => Object.fromEntries(stages.map(([stage]) => [stage, keyGroup.value === 'btc' ? 'btc' : catalog.models.find(m => m.id === selectors[stage].value).provider]));
-  const updateProviderHint = () => {
-    const profiles = selectedProfiles();
-    for (const [stage] of stages) {
-      const value = credentialData?.providers.find(item => item.id === profiles[stage]);
-      const result = value?.checks?.[stage];
-      keyHints[stage].textContent = !credentialData ? 'Chưa đọc được trạng thái key.' : !value?.configured ? `${value?.variable || profiles[stage]}: chưa lưu key.` : `${value.variable} · ${keyStatusText(value.last_check)}${result?.model === selectors[stage].value ? ' · Model này: ' + keyStatusText(result) : ' · Model đang chọn chưa có kết quả kiểm tra riêng'}${value.last_check?.checked_at ? ' · ' + new Date(value.last_check.checked_at).toLocaleString('vi-VN') : ''}`;
-      keyHints[stage].className = value?.last_check?.status === 'invalid_key' ? 'notice error' : 'field-hint';
-    }
+  const updateNativeConfig = async () => {
+    nativeConfig = await api('/api/upstream/config'); showConfig(nativeConfig); return nativeConfig;
   };
-  populateModels();
-  const rememberModels = () => { try { sessionStorage.setItem('human-mind-model-preference', JSON.stringify({group:keyGroup.value, models:selectedModels()})); } catch {} };
-  try { const preferred = JSON.parse(sessionStorage.getItem('human-mind-model-preference') || 'null'); if (preferred && ['btc','external'].includes(preferred.group)) { keyGroup.value = preferred.group; populateModels(preferred.models); } } catch {}
-  keyGroup.addEventListener('change', () => { populateModels(); updateProviderHint(); rememberModels(); });
-  for (const select of Object.values(selectors)) select.addEventListener('change', () => { updateProviderHint(); rememberModels(); });
-  try { credentialData = await api('/api/credentials'); } catch { /* Submission still reports missing credentials. */ }
-  updateProviderHint();
-  const checkKeys = el('button', 'Kiểm tra key dùng cho các model đã chọn', 'button'); checkKeys.type = 'button';
-  const keyCheckStatus = el('p', '', 'field-hint'); keyCheckStatus.setAttribute('role','status');
-  checkKeys.addEventListener('click', async () => {
-    checkKeys.disabled = true;
-    const results = [];
-    try {
-      for (const choice of new Set(Object.values(selectedProfiles()))) {
-        keyCheckStatus.textContent = `Đang kiểm tra key ${choice}…`;
-        try { const response = await api(`/api/credentials/${choice}/check`, {method:'POST',body:'{}'}); results.push(`${response.result.key_label}: ${keyStatusText(response.result)}${response.current ? '' : ' (key đã đổi, cần kiểm tra lại)'}`); }
-        catch(error) { results.push(`${choice}: ${error.message}`); }
-      }
-      credentialData = await api('/api/credentials'); updateProviderHint(); keyCheckStatus.textContent = results.join(' | ');
-    } catch(error) { keyCheckStatus.textContent = error.message; } finally { checkKeys.disabled = false; }
-  });
-  form.append(checkKeys, keyCheckStatus);
-  form.append(el('p', 'BTC: mọi model dùng BTC_API_KEY. Ngoài: model OpenAI dùng key OpenAI, Gemini dùng key Google, DeepSeek dùng key DeepSeek. Chỉ liệt kê model đúng chức năng từng bước; ảnh, video, giọng nói không dùng trong luồng RAG này. Khả năng gọi thực tế còn phụ thuộc quyền và hạn mức của key.', 'field-hint'));
-  form.append(el('p', 'Tải trang, parse, chia đoạn và index chạy local. Embedding câu hỏi luôn giữ đúng model và bộ key của index. Cụm “đến nay” được quy đổi theo năm hiện tại khi bắt đầu và ghi rõ trong phiên.', 'field-hint'));
-  if (options.openSettings) {
-    const settings = el('button', 'Mở cấu hình API key', 'button'); settings.type = 'button'; settings.addEventListener('click', options.openSettings); form.append(settings);
-  }
+  try { await updateNativeConfig(); } catch(error) { apiConfigPanel.append(el('p', error.message, 'notice error')); }
+  const refreshConfig = el('button', 'Đọc lại cấu hình upstream', 'button'); refreshConfig.type = 'button';
+  refreshConfig.addEventListener('click', async () => { try { await updateNativeConfig(); } catch(error) { apiConfigPanel.replaceChildren(el('p', error.message, 'notice error')); } });
+  form.append(refreshConfig);
   const autoLabel = el('label', '', 'notice'), autoApprove = el('input'); autoApprove.type = 'checkbox'; autoApprove.id = 'pipeline-auto-approve';
   autoLabel.append(autoApprove, document.createTextNode(' Tự động duyệt tài liệu đủ điều kiện')); form.append(autoLabel);
   form.append(el('p', 'Tự duyệt chỉ áp dụng bản mới: điểm trích xuất ≥90, không cảnh báo/lỗi, có bằng chứng AI hợp lệ và khớp phạm vi. Bản không đạt giữ lại cho người duyệt. Lịch sử ghi rõ hệ thống duyệt; đây không phải xác minh sự thật.', 'field-hint'));
@@ -109,13 +70,12 @@ export async function renderPipeline(container, api, openQueue, options = {}) {
   const prepare = job => {
     scope.value = job.scope; collection.value = job.collection;
     pages.value = job.max_pages || 12; depth.value = job.max_depth ?? 1;
-    keyGroup.value = job.key_group || (job.provider === 'openai' ? 'external' : 'btc');
-    populateModels(job.stage_models); updateProviderHint(); autoApprove.checked = job.auto_approve === true;
+    autoApprove.checked = job.auto_approve === true;
     formTitle.textContent = `Cấu hình từ phiên · ${job.collection}`;
   };
   if (options.preset) {
     prepare(options.preset);
-    status.textContent = 'Bước 3: đã chọn bộ tài liệu vừa duyệt. Kiểm tra bộ key và model, rồi bấm Tạo index từ bản đã duyệt.';
+    status.textContent = 'Bước 3: đã chọn bộ tài liệu vừa duyệt. Kiểm tra cấu hình API gốc đang hiển thị, rồi bấm Tạo index từ bản đã duyệt.';
   }
   const currentTitle = el('h2', 'Phiên đang xem', 'pipeline-jobs-title'); container.append(currentTitle);
   const jobs = el('section'); jobs.id = 'pipeline-current-job'; jobs.setAttribute('aria-label', 'Phiên đang xem'); container.append(jobs);
@@ -130,8 +90,8 @@ export async function renderPipeline(container, api, openQueue, options = {}) {
   const clearCard = () => { cards.clear(); jobs.replaceChildren(); };
   fresh.addEventListener('click', () => {
     select(null); clearCard(); history.open = false; scope.value = collection.value = '';
-    pages.value = '12'; depth.value = '1'; autoApprove.checked = false; updateProviderHint();
-    formTitle.textContent = 'Cấu hình phiên mới'; status.textContent = 'Nhập chủ đề, bộ tài liệu, chọn bộ key và model rồi bấm Bắt đầu crawl để tự tìm nguồn. Bộ key/model đang chọn được giữ nguyên; tài liệu cũ nằm trong Lịch sử.';
+    pages.value = '12'; depth.value = '1'; autoApprove.checked = false;
+    formTitle.textContent = 'Cấu hình phiên mới'; status.textContent = 'Nhập chủ đề và bộ tài liệu rồi bấm Bắt đầu crawl. API đọc cấu hình scope-data-bot; tài liệu cũ nằm trong Lịch sử.';
     load(); scope.focus(); form.scrollIntoView({behavior:'smooth',block:'start'});
   });
   const active = () => container.contains(form) && !container.hidden;
@@ -154,20 +114,20 @@ export async function renderPipeline(container, api, openQueue, options = {}) {
       section.append(el('p', pending ? `Đã tiếp nhận ${job.document_ids.length} tài liệu, còn ${pending} tài liệu chờ duyệt. Kiểm tra nguồn và nội dung trước khi đưa vào RAG.` : 'Phiên này không còn tài liệu chờ duyệt. Xem lại quyết định bên dưới; chỉ bản được phê duyệt mới có thể đưa vào index.'));
       action(pending ? `Tiếp tục duyệt ${pending} tài liệu →` : 'Xem tài liệu của phiên →', () => openQueue(job));
       if (pending) action('Tự động duyệt tài liệu đủ điều kiện', async () => { await api(`/api/pipeline/${job.id}/auto-review`, {method:'POST',body:'{}'}); await load(); });
-      if (documents.some(doc => doc.status === 'approved')) action('Tiếp theo: cấu hình tạo index', () => { prepare(job); status.textContent = 'Đã chọn bộ tài liệu của phiên. Kiểm tra model rồi bấm Tạo index từ bản đã duyệt; bước này có thể phát sinh phí.'; provider.focus(); form.scrollIntoView({behavior:'smooth',block:'start'}); });
+      if (documents.some(doc => doc.status === 'approved')) action('Tiếp theo: cấu hình tạo index', () => { prepare(job); status.textContent = 'Đã chọn bộ tài liệu của phiên. Kiểm tra cấu hình upstream rồi bấm Tạo index từ bản đã duyệt; bước này có thể phát sinh phí.'; build.focus(); form.scrollIntoView({behavior:'smooth',block:'start'}); });
     } else if (job.status === 'running') {
       section.append(el('p', job.action === 'crawl' ? 'Đang thu thập. Khi có tài liệu, nút Tiếp tục duyệt sẽ xuất hiện ở đây. Trace tự cập nhật mỗi 3 giây.' : 'Đang tạo index. Khi hoàn tất, nhập câu hỏi để kiểm tra evidence.'));
     } else if (job.action === 'crawl') {
       section.classList.add('needs-attention');
       section.append(el('p', job.status === 'no_documents' ? 'Model đã trả kết quả nhưng chưa lấy được tài liệu để duyệt. Xem Trace chi tiết để biết nguồn bị chặn, lỗi HTTPS hoặc không khớp phạm vi. Đây không phải kết luận key hỏng.' : 'Chưa có tài liệu để duyệt. Xem bước lỗi trong trace và hướng dẫn xử lý, rồi chạy lại phiên.'));
-      if (options.openSettings) action('Mở cấu hình API key →', options.openSettings);
-      action('Kiểm tra phạm vi và thử lại →', () => { prepare(job); status.textContent = 'Đã khôi phục phạm vi. Chọn provider có key hợp lệ rồi bấm Bắt đầu crawl; hệ thống sẽ tự tìm URL. Chưa chạy lại tự động.'; scope.focus(); form.scrollIntoView({behavior:'smooth',block:'start'}); });
+      action('Xem cấu hình API upstream →', async () => { await updateNativeConfig(); apiConfigPanel.scrollIntoView({behavior:'smooth',block:'center'}); });
+      action('Kiểm tra phạm vi và thử lại →', () => { prepare(job); status.textContent = 'Đã khôi phục phạm vi. Kiểm tra key trong environment hoặc scope-data-bot/.env.local rồi bấm Bắt đầu crawl; hệ thống sẽ tự tìm URL. Chưa chạy lại tự động.'; scope.focus(); form.scrollIntoView({behavior:'smooth',block:'start'}); });
     } else if (job.status === 'ready') {
       section.append(el('p', 'Index đã tạo. Nhập câu hỏi bên dưới và bấm Lấy evidence để kiểm tra nguồn trả về.'));
     } else {
       section.append(el('p', 'Index chưa sẵn sàng. Kiểm tra lỗi, key và tài liệu đã duyệt trước khi tạo lại.'));
-      if (options.openSettings) action('Mở cấu hình API key →', options.openSettings);
-      action('Kiểm tra cấu hình tạo index →', () => { prepare(job); provider.focus(); form.scrollIntoView({behavior:'smooth',block:'start'}); });
+      action('Xem cấu hình API upstream →', async () => { await updateNativeConfig(); apiConfigPanel.scrollIntoView({behavior:'smooth',block:'center'}); });
+      action('Kiểm tra cấu hình tạo index →', () => { prepare(job); build.focus(); form.scrollIntoView({behavior:'smooth',block:'start'}); });
       if (options.openSearch) {
         section.append(el('p', 'Trong lúc chưa có index, có thể kiểm tra bản đã duyệt bằng tìm từ khóa local. Cách này không tạo embedding và không gọi AI.'));
         action('Tra cứu từ khóa không dùng key →', () => options.openSearch(job.collection));
@@ -257,9 +217,8 @@ export async function renderPipeline(container, api, openQueue, options = {}) {
     if (loading) { reloadRequested = true; return; }
     loading = true; clearTimeout(timer);
     try {
-      const [result, documentData, keyData] = await Promise.all([api('/api/pipeline'), api('/api/documents'), api('/api/credentials')]);
+      const [result, documentData] = await Promise.all([api('/api/pipeline'), api('/api/documents')]);
       if (!active()) return;
-      credentialData = keyData; updateProviderHint();
       running = result.jobs.some(job => job.status === 'running');
       refresh.textContent = running ? 'Đang tự cập nhật mỗi 3 giây · Cập nhật ngay' : 'Cập nhật trạng thái';
       if (selectedId === undefined) select(result.jobs[0]?.id || null);
@@ -291,28 +250,23 @@ export async function renderPipeline(container, api, openQueue, options = {}) {
         card.append(el('h3', `${job.action === 'crawl' ? 'Crawl' : 'Index'} · ${job.collection}`), el('p', `${names[job.status] || job.status} · ${new Date(job.created_at).toLocaleString('vi-VN')}`), el('p', job.scope));
         if (job.action === 'crawl') {
           card.append(el('p', `${job.document_ids.length} tài liệu đã tiếp nhận từ phiên này.`, 'field-hint'));
-          card.append(el('p', job.integration === 'upstream-model-routing' ? `scope-data-bot · ${job.key_group === 'btc' ? 'BTC' : 'Ngoài'} · model theo bước · ${job.upstream_commit.slice(0,7)}` : job.integration === 'upstream-stage-routing' ? `scope-data-bot · API theo từng bước · ${job.upstream_commit.slice(0,7)}` : job.integration === 'upstream-native' ? `scope-data-bot gốc · AI tự tìm nguồn · ${job.provider} · ${job.upstream_commit.slice(0, 7)}` : 'Phiên lịch sử dùng cách tích hợp cũ. Khi chạy lại, pipeline dùng AI tự tìm nguồn theo repo gốc.', 'field-hint'));
+          card.append(el('p', job.integration === 'upstream-native-api' ? `scope-data-bot gốc · ${job.api_config.provider} · ${job.api_config.text_model} · ${job.upstream_commit.slice(0,7)}` : job.integration === 'upstream-model-routing' ? `scope-data-bot · ${job.key_group === 'btc' ? 'BTC' : 'Ngoài'} · model theo bước · ${job.upstream_commit.slice(0,7)}` : job.integration === 'upstream-stage-routing' ? `scope-data-bot · API theo từng bước · ${job.upstream_commit.slice(0,7)}` : job.integration === 'upstream-native' ? `scope-data-bot gốc · AI tự tìm nguồn · ${job.provider} · ${job.upstream_commit.slice(0, 7)}` : 'Phiên lịch sử dùng cách tích hợp cũ. Khi chạy lại, pipeline dùng AI tự tìm nguồn theo repo gốc.', 'field-hint'));
         }
         card.append(nextStep(job, documents));
         if (job.effective_scope && job.effective_scope !== job.scope) card.append(el('p', `Phạm vi đã quy đổi ngày ${job.scope_resolved_on}: ${job.effective_scope}`, 'notice'));
-        if (job.error) { card.append(el('p', job.error, 'notice error')); card.append(el('p', 'Đây là kết quả của phiên đã chạy. Thay key không chạy lại phiên cũ; kiểm tra trạng thái key hiện tại ở trên rồi bấm Bắt đầu crawl để tạo lượt mới.', 'field-hint')); }
+        if (job.error) { card.append(el('p', job.error, 'notice error')); card.append(el('p', 'Đây là kết quả của phiên đã chạy. Thay key không chạy lại phiên cũ; kiểm tra cấu hình upstream hiện tại ở trên rồi bấm Bắt đầu crawl để tạo lượt mới.', 'field-hint')); }
         for (const error of job.errors) card.append(el('p', error, 'notice error'));
         let output, question;
         if (job.status === 'ready') {
           card.append(el('p', `${job.manifest.chunk_count} đoạn · ${job.provider} · hiệu lực ${job.as_of}. Index sẽ được kiểm tra lại với quyết định duyệt khi truy vấn.`, 'field-hint'));
           question = el('input'); question.placeholder = 'Câu hỏi để lấy evidence'; question.maxLength = 8000; question.setAttribute('aria-label', 'Câu hỏi để lấy evidence');
-          const evidenceLabel = el('label', 'Model kiểm phạm vi / rerank cho lần tra này'), evidenceModel = el('select');
-          evidenceModel.id = `evidence-model-${job.id}`; evidenceLabel.htmlFor = evidenceModel.id;
-          const jobGroup = job.key_group || (job.provider === 'btc' ? 'btc' : 'external');
-          for (const model of catalog.models.filter(m => m.groups.includes(jobGroup) && m.stages.includes('evidence'))) { const option = el('option',model.id); option.value = model.id; evidenceModel.append(option); }
-          evidenceModel.value = job.stage_models?.evidence || catalog.defaults[jobGroup].evidence;
-          if (!job.key_group) { evidenceModel.replaceChildren(el('option', 'Theo cấu hình phiên cũ · xem model thực tế trong trace')); evidenceModel.disabled = true; }
-          card.append(evidenceLabel, evidenceModel, el('p', `Embedding câu hỏi cố định: ${job.provider} · ${job.model}; phải khớp index.`, 'field-hint'));
+          card.append(el('p', job.api_config ? `API gốc: ${job.api_config.provider} · ${job.api_config.text_model}. Embedding: ${job.model} · ${job.dimensions} chiều. Thay cấu hình cần tạo lại index.` : 'Index adapter cũ: xem evidence đã lưu hoặc tạo lại index bằng API gốc để tra mới.', 'notice'));
           const ask = el('button', 'Lấy evidence', 'button primary'); ask.type = 'button'; output = el('section', '', 'pipeline-evidence'); output.setAttribute('aria-live', 'polite');
+          ask.disabled = job.integration !== 'upstream-native-api';
           ask.addEventListener('click', async () => {
             if (!question.value.trim()) { output.replaceChildren(el('p', 'Nhập câu hỏi trước khi lấy evidence.', 'notice error')); question.focus(); return; }
             ask.disabled = true; output.textContent = 'Đang truy hồi…';
-            try { showEvidence(job, output, await api(`/api/pipeline/${job.id}/evidence`, {method:'POST',body:JSON.stringify({question:question.value,...(job.key_group ? {model:evidenceModel.value} : {})})})); await showTrace(job, panel); }
+            try { showEvidence(job, output, await api(`/api/pipeline/${job.id}/evidence`, {method:'POST',body:JSON.stringify({question:question.value})})); await showTrace(job, panel); }
             catch(error) { output.replaceChildren(el('p', error.message, 'notice error')); }
             finally { ask.disabled = false; }
           });
@@ -331,13 +285,9 @@ export async function renderPipeline(container, api, openQueue, options = {}) {
     if (!form.reportValidity()) return;
     crawl.disabled = build.disabled = fresh.disabled = true;
     try {
-      credentialData = await api('/api/credentials'); updateProviderHint();
-      const required = action === 'crawl' ? ['planner','search','check'] : ['embedding'];
-      const profiles = selectedProfiles();
-      const missing = [...new Set(required.map(s => profiles[s]))].filter(p => !credentialData.providers.find(item => item.id === p)?.configured);
-      if (missing.length) throw new Error(`Chưa có key cho bộ/model đang chọn: ${missing.join(', ')}. Chọn đúng BTC hoặc Ngoài ở trên, hoặc mở Cấu hình API key. Chưa tạo phiên, chưa gọi AI.`);
-      rememberModels();
-      const job = await api('/api/pipeline', {method:'POST', body:JSON.stringify({action, scope:scope.value, collection:collection.value, max_pages:Number(pages.value), max_depth:Number(depth.value), key_group:keyGroup.value, stage_models:selectedModels(), auto_approve:action === 'crawl' && autoApprove.checked})});
+      const config = await updateNativeConfig();
+      if (!config.key.configured) throw new Error(`${config.key.name}: chưa có key trong environment hoặc scope-data-bot/.env.local. Chưa tạo phiên, chưa gọi AI.`);
+      const job = await api('/api/pipeline', {method:'POST', body:JSON.stringify({action, scope:scope.value, collection:collection.value, max_pages:Number(pages.value), max_depth:Number(depth.value), auto_approve:action === 'crawl' && autoApprove.checked})});
       select(job.id); clearCard(); history.open = false;
       status.textContent = 'Đã bắt đầu. Trace tự cập nhật mỗi 3 giây khi phiên đang chạy. Có thể chuyển sang hàng chờ.'; await load();
       currentTitle.scrollIntoView({behavior:'smooth',block:'start'});
@@ -346,5 +296,5 @@ export async function renderPipeline(container, api, openQueue, options = {}) {
   };
   form.addEventListener('submit', event => { event.preventDefault(); start('crawl'); }); build.addEventListener('click', () => start('build')); refresh.addEventListener('click', load);
   await load();
-  if (options.preset) { provider.focus(); form.scrollIntoView({behavior:'smooth',block:'start'}); }
+  if (options.preset) { build.focus(); form.scrollIntoView({behavior:'smooth',block:'start'}); }
 }

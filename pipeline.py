@@ -10,16 +10,10 @@ import sys
 from threading import Lock, Thread
 from uuid import uuid4
 
-from ingestion import _worker_environment, _require_upstream, MAX_BYTES, MAX_TEXT, UPSTREAM_COMMIT
+from ingestion import _require_upstream, MAX_BYTES, MAX_TEXT, UPSTREAM_COMMIT
 from store import Conflict, now, today, canonical_date
-from api_routing import stage_providers, stages_for
-from provider_health import STAGE_LABELS, describe
-from model_catalog import configuration, normalize_scope
-
-MODELS = {
-    "btc": ("text-multilingual-embedding-002", 768),
-    "openai": ("text-embedding-3-small", 1536),
-}
+from provider_health import describe
+from upstream_config import read_config, native_environment, routing_signature
 
 
 def fingerprint(documents):
@@ -106,7 +100,7 @@ class Pipeline:
                 text=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                env=_worker_environment(),
+                env=native_environment(),
                 timeout=1800,
                 check=True,
             )
@@ -156,7 +150,7 @@ class Pipeline:
             "status": "running",
             "document_ids": [],
             "errors": [],
-            "integration": "upstream-stage-routing",
+            "integration": "upstream-native-api",
             "upstream_commit": UPSTREAM_COMMIT,
         }
         if type(payload.get("auto_approve", False)) is not bool:
@@ -166,24 +160,26 @@ class Pipeline:
             raise ValueError(
                 "Pipeline gốc tự tìm nguồn từ phạm vi; không nhận seed_urls. Tải lại trang để dùng biểu mẫu mới."
             )
-        config = (
-            configuration(payload.get("key_group", "btc"), payload.get("stage_models"))
-            if "key_group" in payload or "stage_models" in payload
-            else None
-        )
-        profiles = (
-            config["stage_providers"]
-            if config
-            else stage_providers(payload.get("stage_providers"), payload.get("provider", "btc"))
-        )
-        if config:
-            job.update(config, integration="upstream-model-routing")
-            job["effective_scope"] = normalize_scope(job["scope"], today())
-            job["scope_resolved_on"] = today()
-        provider = profiles["planner" if action == "crawl" else "embedding"]
-        job.update(provider=provider, stage_providers=profiles)
-        key = self.stage_credentials(profiles, action)
-        job["credential_versions"] = {name: value["version"] for name, value in key.items()}
+        overrides = {
+            "key_group",
+            "stage_models",
+            "stage_providers",
+            "provider",
+            "model",
+            "dimensions",
+        }
+        if overrides.intersection(payload):
+            raise ValueError(
+                "API dùng cấu hình scope-data-bot gốc; không nhận chọn provider/model từ UI. Tải lại trang."
+            )
+        config = read_config()
+        if not config["key"]["configured"]:
+            raise ValueError(
+                f"{config['key']['name']}: chưa có key trong environment hoặc scope-data-bot/.env.local. Kho key UI không dùng cho pipeline gốc."
+            )
+        provider = config["provider"]
+        job.update(provider=provider, api_config=config)
+        key = ""
         if action == "crawl":
             job.update(planner="model", search_provider="openai")
             for name, default, high in (
@@ -198,8 +194,8 @@ class Pipeline:
         else:
             job.update(
                 provider=provider,
-                model=config["stage_models"]["embedding"] if config else MODELS[provider][0],
-                dimensions=config["dimensions"] if config else MODELS[provider][1],
+                model=config["embedding_model"],
+                dimensions=config["dimensions"],
                 max_chunks=400,
                 as_of=today(),
             )
@@ -235,17 +231,6 @@ class Pipeline:
                 self.busy = False
                 raise
         return job
-
-    def stage_credentials(self, profiles, action):
-        selected = {}
-        for stage in stages_for(action):
-            provider = profiles[stage]
-            if provider not in selected:
-                try:
-                    selected[provider] = self.credentials.snapshot(provider)
-                except ValueError as error:
-                    raise ValueError(f"{STAGE_LABELS[stage]} · {provider}: {error}") from None
-        return selected
 
     def import_run(self, job, run):
         run = Path(run).resolve()
@@ -473,38 +458,28 @@ class Pipeline:
         if not isinstance(question, str) or not 1 <= len(question.strip()) <= 8000:
             raise ValueError("Câu hỏi cần 1–8.000 ký tự.")
         self.assert_current(job)
-        config = (
-            configuration(
-                job["key_group"],
-                {
-                    **job["stage_models"],
-                    **({"evidence": evidence_model} if evidence_model is not None else {}),
-                },
+        if evidence_provider is not None or evidence_model is not None:
+            raise ValueError(
+                "Không chọn model/provider cho từng lần tra; dùng cấu hình API upstream."
             )
-            if job.get("key_group")
-            else None
-        )
-        profiles = (
-            config["stage_providers"]
-            if config
-            else stage_providers(job.get("stage_providers"), job["provider"])
-        )
-        # Query vectors must use exactly the provider/model of the indexed corpus.
-        profiles["embedding"] = job["provider"]
-        if evidence_provider is not None and not config:
-            profiles["evidence"] = evidence_provider
-        if not config:
-            profiles = stage_providers(profiles)
+        if job.get("integration") != "upstream-native-api":
+            raise Conflict(
+                "Index này dùng adapter API cũ. Tạo lại index theo cấu hình upstream trước khi tra mới; evidence đã lưu vẫn xem được."
+            )
+        config = read_config()
+        if routing_signature(config) != routing_signature(job["api_config"]):
+            raise Conflict(
+                "Cấu hình API upstream khác index. Khôi phục cấu hình hoặc tạo lại index trước khi lấy evidence."
+            )
+        if not config["key"]["configured"]:
+            raise ValueError(f"{config['key']['name']}: thiếu key trong cấu hình upstream.")
         result = self.worker(
             {
                 **job,
-                **(config or {}),
                 "action": "retrieve",
-                "stage_providers": profiles,
                 "question": question,
                 "folder": str(self.folder / identifier),
-            },
-            self.stage_credentials(profiles, "retrieve"),
+            }
         )
         self.assert_current(job)
         path = self.folder / identifier / "last-evidence.json"

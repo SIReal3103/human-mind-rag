@@ -23,6 +23,7 @@ export async function renderCredentials(container, api) {
   try {
     const data = await api('/api/credentials');
     container.replaceChildren();
+    container.append(element('p', 'Kho key này độc lập với pipeline API gốc. Crawl/build/evidence đọc environment hoặc scope-data-bot/.env.local; thay/reset key tại đây không thay key upstream.', 'notice'));
     container.append(element('p', 'BTC và các nhà cung cấp là hai bộ key độc lập. Nút Lưu/Thay key kiểm tra kết nối bằng cách liệt kê model, không sinh nội dung. Lỗi trong phiên cũ vẫn là lịch sử; cần chạy phiên mới sau khi thay key.', 'notice'));
     const storage = element('p', 'Key được lưu dạng file trên máy này, chỉ tài khoản hệ điều hành hiện tại được đọc/ghi (0600). File chưa mã hóa riêng; không lưu vào Git, tài liệu RAG hoặc bộ nhớ trình duyệt.', 'field-hint');
     container.append(storage, element('p', 'Kiểm tra key chỉ gọi API liệt kê model, không sinh nội dung. Thành công không đồng nghĩa đã có quyền dùng mọi model, tìm web, embedding hoặc Veo.', 'field-hint'));
